@@ -1,0 +1,70 @@
+@page "/client"
+
+<PageTitle>Denis CS 1.6 — Скачать клиент</PageTitle>
+
+@code {
+    private const string DownloadUrl = "https://cs.tjpro.ru/downloads/Counter-Strike-1.6-Denis.zip";
+}
+
+<div class="page client-page">
+    <header class="header">
+        <div>
+            <div class="eyebrow">Counter-Strike 1.6</div>
+            <h1>Игра на нашем сервере</h1>
+            <div class="sub">Готовый клиент с сервером уже в избранном.</div>
+        </div>
+    </header>
+
+    <section class="card download-card">
+        <div class="download-icon">CS</div>
+        <div class="download-content">
+            <h2>Скачать клиент</h2>
+            <p>Скачай архив, распакуй его в любую папку на компьютере и запусти игру через готовый файл.</p>
+            <a class="download-button" href="@DownloadUrl">СКАЧАТЬ CLIENT</a>
+            <div class="muted download-note">Размер архива зависит от версии клиента.</div>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>Как запустить</h2>
+        <div class="steps">
+            <div class="step">
+                <div class="step-number">1</div>
+                <div>
+                    <strong>Распакуй архив</strong>
+                    <div class="muted">Например, в <code>C:\Games\CS16</code>.</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2</div>
+                <div>
+                    <strong>Смени ник</strong>
+                    <div class="muted">В настройках игры открой Multiplayer → Player Name.</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3</div>
+                <div>
+                    <strong>Запусти игру</strong>
+                    <div class="muted">В папке клиента дважды нажми <strong>Играть на нашем сервере.bat</strong>.</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">4</div>
+                <div>
+                    <strong>Готово</strong>
+                    <div class="muted">Игра сразу подключится к <code>cs.tjpro.ru:27015</code>.</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="card info-card">
+        <h2>Если не хочется запускать через bat</h2>
+        <p>Сервер уже добавлен в избранное клиента. Можно открыть список серверов и выбрать <strong>Denis CS 1.6</strong>.</p>
+        <a class="connect-button" href="steam://connect/cs.tjpro.ru:27015">ПОДКЛЮЧИТЬСЯ ЧЕРЕЗ STEAM</a>
+    </section>
+</div>
