@@ -54,10 +54,13 @@ public sealed class CsServer
         if (difficulty is < 0 or > 3) throw new InvalidOperationException("Некорректная сложность.");
 
         LastError = "";
-        await rcon.ExecuteAsync(host, port, password, $"yb_quota 0");
+
+        await rcon.ExecuteAsync(host, port, password, "yb_quota 0");
         await rcon.ExecuteAsync(host, port, password, $"changelevel {map}");
 
-        await Task.Delay(2500);
+        // HLDS can be temporarily unavailable while loading the new map.
+        // Wait until it answers RCON again before sending YaPB commands.
+        await WaitForServerAsync(TimeSpan.FromSeconds(10));
 
         await rcon.ExecuteAsync(host, port, password, "yb_quota_mode normal");
         await rcon.ExecuteAsync(host, port, password, $"yb_difficulty {difficulty}");
@@ -69,8 +72,36 @@ public sealed class CsServer
     public async Task ResetAsync()
     {
         await rcon.ExecuteAsync(host, port, password, "yb_quota 0");
-        await rcon.ExecuteAsync(host, port, password, "changelevel de_dust2");
+        await rcon.ExecuteAsync(host, port, password, "changelevel cs_assault");
+        await WaitForServerAsync(TimeSpan.FromSeconds(10));
         MatchActive = false;
+    }
+
+    private async Task WaitForServerAsync(TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        Exception? lastError = null;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                var text = await rcon.ExecuteAsync(host, port, password, "status");
+                ParseStatus(text);
+                IsOnline = true;
+                LastError = "";
+                return;
+            }
+            catch (Exception ex)
+            {
+                lastError = ex;
+                await Task.Delay(500);
+            }
+        }
+
+        throw new TimeoutException(
+            $"Сервер не ответил после смены карты за {timeout.TotalSeconds:0} сек.",
+            lastError);
     }
 
     private void ParseStatus(string text)
