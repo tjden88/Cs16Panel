@@ -67,6 +67,7 @@
                 <option value="2">Hard</option>
                 <option value="3">Expert</option>
             </select>
+            <div class="hint">Сложность используется только при включённых ботах.</div>
 
             <button class="primary" @onclick="StartGame" disabled="@working">
                 @(working ? "ЗАПУСКАЮ..." : "ЗАПУСТИТЬ ИГРУ")
@@ -85,7 +86,7 @@
             <h2 class="players-title">Игроки</h2>
             @if (Server.PlayerNames.Count == 0)
             {
-                <div class="muted">Пока никого. Даже боты ушли по делам.</div>
+                <div class="muted">Пока никого. Можно создать игру.</div>
             }
             else
             {
@@ -103,7 +104,7 @@
 </div>
 
 @code {
-    private string selectedMap = "de_dust2";
+    private string selectedMap = "cs_assault";
     private int bots = 0;
     private int difficulty = 1;
     private bool working;
@@ -114,7 +115,9 @@
         await Server.RefreshAsync();
         selectedMap = Server.Map != "unknown" && Server.Maps.Contains(Server.Map)
             ? Server.Map
-            : Server.Maps.FirstOrDefault() ?? "de_dust2";
+            : Server.Maps.FirstOrDefault(x => x.Equals("cs_assault", StringComparison.OrdinalIgnoreCase))
+                ?? Server.Maps.FirstOrDefault()
+                ?? "cs_assault";
 
         timer = new System.Threading.Timer(async _ =>
         {
