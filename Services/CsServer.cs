@@ -66,9 +66,18 @@ public sealed class CsServer
             await rcon.ExecuteAsync(host, port, password, "yb_quota 0");
             await rcon.ExecuteAsync(host, port, password, $"changelevel {map}");
 
-            // HLDS is temporarily unavailable for RCON while loading a map.
-            // Wait for it to come back instead of racing the 5-second status timer.
-            await WaitForServerAsync();
+            for (var i = 0; i < 10; i++)
+            {
+                await Task.Delay(1000);
+                try
+                {
+                    await rcon.ExecuteAsync(host, port, password, "status");
+                    break;
+                }
+                catch (TimeoutException) when (i < 9)
+                {
+                }
+            }
 
             await rcon.ExecuteAsync(host, port, password, "yb_quota_mode normal");
             await rcon.ExecuteAsync(host, port, password, $"yb_difficulty {difficulty}");
@@ -82,16 +91,12 @@ public sealed class CsServer
         }
     }
 
-    public async Task ResetAsync()
+    public async Task RemoveBotsAsync()
     {
         await rconLock.WaitAsync();
         try
         {
-            LastError = "";
             await rcon.ExecuteAsync(host, port, password, "yb_quota 0");
-            await rcon.ExecuteAsync(host, port, password, "changelevel cs_assault");
-            await WaitForServerAsync();
-            MatchActive = false;
         }
         finally
         {
@@ -99,27 +104,33 @@ public sealed class CsServer
         }
     }
 
-    private async Task WaitForServerAsync()
+    public async Task ResetAsync()
     {
-        const int attempts = 20;
-
-        for (var i = 0; i < attempts; i++)
+        await rconLock.WaitAsync();
+        try
         {
-            try
-            {
-                var text = await rcon.ExecuteAsync(host, port, password, "status");
-                ParseStatus(text);
-                IsOnline = true;
-                LastError = "";
-                return;
-            }
-            catch (TimeoutException) when (i < attempts - 1)
-            {
-                await Task.Delay(500);
-            }
-        }
+            await rcon.ExecuteAsync(host, port, password, "yb_quota 0");
+            await rcon.ExecuteAsync(host, port, password, "changelevel cs_assault");
 
-        throw new TimeoutException("Сервер не ответил после смены карты.");
+            for (var i = 0; i < 10; i++)
+            {
+                await Task.Delay(1000);
+                try
+                {
+                    await rcon.ExecuteAsync(host, port, password, "status");
+                    break;
+                }
+                catch (TimeoutException) when (i < 9)
+                {
+                }
+            }
+
+            MatchActive = false;
+        }
+        finally
+        {
+            rconLock.Release();
+        }
     }
 
     private void ParseStatus(string text)
