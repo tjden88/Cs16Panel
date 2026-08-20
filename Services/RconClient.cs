@@ -21,9 +21,10 @@ public sealed class RconClient
 
         udp.Connect(host, port);
 
-        // 1. Получаем challenge
-        var challengeRequest =
-            Encoding.ASCII.GetBytes("\xFF\xFF\xFF\xFFchallenge rcon\n");
+        // GoldSrc connectionless packet header: FF FF FF FF
+        var challengeRequest = Combine(
+            [0xFF, 0xFF, 0xFF, 0xFF],
+            Encoding.ASCII.GetBytes("challenge rcon\n"));
 
         await udp.SendAsync(challengeRequest, ct);
 
@@ -34,40 +35,25 @@ public sealed class RconClient
 
         var challengeText = Decode(challengePacket);
 
-        var challengeMatch = ChallengeRegex.Match(challengeText);
+        var match = ChallengeRegex.Match(challengeText);
 
-        if (!challengeMatch.Success)
+        if (!match.Success)
         {
             throw new InvalidOperationException(
                 $"Не удалось получить RCON challenge. Ответ сервера: {challengeText.Trim()}");
         }
 
-        var challenge = challengeMatch.Groups["value"].Value;
+        var challenge = match.Groups["value"].Value;
 
-        // 2. Отправляем команду
         var payload =
             $"rcon {challenge} \"{Escape(password)}\" {command}\n";
 
-        var payloadBytes = Encoding.ASCII.GetBytes(payload);
-
-        var packet = new byte[4 + payloadBytes.Length];
-
-        packet[0] = 0xFF;
-        packet[1] = 0xFF;
-        packet[2] = 0xFF;
-        packet[3] = 0xFF;
-
-        Buffer.BlockCopy(
-            payloadBytes,
-            0,
-            packet,
-            4,
-            payloadBytes.Length);
+        var packet = Combine(
+            [0xFF, 0xFF, 0xFF, 0xFF],
+            Encoding.ASCII.GetBytes(payload));
 
         await udp.SendAsync(packet, ct);
 
-        // 3. Читаем ответ.
-        // Для наших коротких команд одного пакета достаточно.
         var response = await ReceiveAsync(
             udp,
             ct,
@@ -81,6 +67,16 @@ public sealed class RconClient
         return value
             .Replace("\\", "\\\\")
             .Replace("\"", "\\\"");
+    }
+
+    private static byte[] Combine(byte[] prefix, byte[] data)
+    {
+        var result = new byte[prefix.Length + data.Length];
+
+        Buffer.BlockCopy(prefix, 0, result, 0, prefix.Length);
+        Buffer.BlockCopy(data, 0, result, prefix.Length, data.Length);
+
+        return result;
     }
 
     private static async Task<byte[]> ReceiveAsync(
@@ -105,7 +101,7 @@ public sealed class RconClient
     }
 
     private static string Decode(byte[] packet)
-    { 
+    {
         if (packet.Length <= 4)
             return string.Empty;
 
