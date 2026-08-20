@@ -37,6 +37,7 @@ public sealed class CsServer
         await rconLock.WaitAsync();
         try
         {
+            ReloadMaps();
             var text = await rcon.ExecuteAsync(host, port, password, "status");
             ParseStatus(text);
             IsOnline = true;
