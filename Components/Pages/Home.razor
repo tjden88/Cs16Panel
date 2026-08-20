@@ -76,6 +76,13 @@
             <button class="secondary" @onclick="ResetServer" disabled="@working">
                 ВЕРНУТЬ В ОЖИДАНИЕ
             </button>
+
+            @if (Server.MatchActive)
+            {
+                <button class="danger" @onclick="RemoveBots" disabled="@working">
+                    УБРАТЬ ВСЕХ БОТОВ
+                </button>
+            }
         </section>
 
         <section class="card">
@@ -123,7 +130,9 @@
         {
             await InvokeAsync(async () =>
             {
-                await Server.RefreshAsync();
+                if (!working)
+                    await Server.RefreshAsync();
+
                 StateHasChanged();
             });
         }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
@@ -135,6 +144,20 @@
         try
         {
             await Server.StartGameAsync(selectedMap, bots, difficulty);
+        }
+        finally
+        {
+            working = false;
+            await Server.RefreshAsync();
+        }
+    }
+
+    private async Task RemoveBots()
+    {
+        working = true;
+        try
+        {
+            await Server.RemoveBotsAsync();
         }
         finally
         {
