@@ -65,25 +65,39 @@ public sealed class CsServer
             LastError = "";
             await rcon.ExecuteAsync(host, port, password, "yb_quota 0");
             await rcon.ExecuteAsync(host, port, password, $"changelevel {map}");
-
-            for (var i = 0; i < 10; i++)
-            {
-                await Task.Delay(1000);
-                try
-                {
-                    await rcon.ExecuteAsync(host, port, password, "status");
-                    break;
-                }
-                catch (TimeoutException) when (i < 9)
-                {
-                }
-            }
-
+            await WaitForServerAsync();
             await rcon.ExecuteAsync(host, port, password, "yb_quota_mode normal");
             await rcon.ExecuteAsync(host, port, password, $"yb_difficulty {difficulty}");
             await rcon.ExecuteAsync(host, port, password, $"yb_quota {bots}");
-
             MatchActive = true;
+        }
+        finally
+        {
+            rconLock.Release();
+        }
+    }
+
+    public async Task SetBotsAsync(int count)
+    {
+        if (count is < 0 or > 10) throw new InvalidOperationException("Некорректное количество ботов.");
+
+        await rconLock.WaitAsync();
+        try
+        {
+            await rcon.ExecuteAsync(host, port, password, $"yb_quota {count}");
+        }
+        finally
+        {
+            rconLock.Release();
+        }
+    }
+
+    public async Task RestartRoundAsync()
+    {
+        await rconLock.WaitAsync();
+        try
+        {
+            await rcon.ExecuteAsync(host, port, password, "sv_restart 1");
         }
         finally
         {
@@ -93,15 +107,7 @@ public sealed class CsServer
 
     public async Task RemoveBotsAsync()
     {
-        await rconLock.WaitAsync();
-        try
-        {
-            await rcon.ExecuteAsync(host, port, password, "yb_quota 0");
-        }
-        finally
-        {
-            rconLock.Release();
-        }
+        await SetBotsAsync(0);
     }
 
     public async Task ResetAsync()
@@ -111,26 +117,31 @@ public sealed class CsServer
         {
             await rcon.ExecuteAsync(host, port, password, "yb_quota 0");
             await rcon.ExecuteAsync(host, port, password, "changelevel cs_assault");
-
-            for (var i = 0; i < 10; i++)
-            {
-                await Task.Delay(1000);
-                try
-                {
-                    await rcon.ExecuteAsync(host, port, password, "status");
-                    break;
-                }
-                catch (TimeoutException) when (i < 9)
-                {
-                }
-            }
-
+            await WaitForServerAsync();
             MatchActive = false;
         }
         finally
         {
             rconLock.Release();
         }
+    }
+
+    private async Task WaitForServerAsync()
+    {
+        for (var i = 0; i < 10; i++)
+        {
+            await Task.Delay(1000);
+            try
+            {
+                await rcon.ExecuteAsync(host, port, password, "status");
+                return;
+            }
+            catch (TimeoutException) when (i < 9)
+            {
+            }
+        }
+
+        throw new TimeoutException("Сервер не ответил после смены карты.");
     }
 
     private void ParseStatus(string text)
