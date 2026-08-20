@@ -5,6 +5,7 @@ namespace Cs16Panel.Services;
 public sealed class CsServer
 {
     private readonly RconClient rcon = new();
+    private readonly SemaphoreSlim rconLock = new(1, 1);
     private readonly string host = Environment.GetEnvironmentVariable("CS_SERVER_HOST") ?? "127.0.0.1";
     private readonly int port = int.TryParse(Environment.GetEnvironmentVariable("CS_SERVER_PORT"), out var p) ? p : 27015;
     private readonly string password = Environment.GetEnvironmentVariable("CS_RCON_PASSWORD") ?? "";
@@ -33,6 +34,7 @@ public sealed class CsServer
 
     public async Task RefreshAsync()
     {
+        await rconLock.WaitAsync();
         try
         {
             var text = await rcon.ExecuteAsync(host, port, password, "status");
@@ -45,6 +47,10 @@ public sealed class CsServer
             IsOnline = false;
             LastError = ex.Message;
         }
+        finally
+        {
+            rconLock.Release();
+        }
     }
 
     public async Task StartGameAsync(string map, int bots, int difficulty)
@@ -53,36 +59,51 @@ public sealed class CsServer
         if (bots is < 0 or > 10) throw new InvalidOperationException("Некорректное количество ботов.");
         if (difficulty is < 0 or > 3) throw new InvalidOperationException("Некорректная сложность.");
 
-        LastError = "";
+        await rconLock.WaitAsync();
+        try
+        {
+            LastError = "";
+            await rcon.ExecuteAsync(host, port, password, "yb_quota 0");
+            await rcon.ExecuteAsync(host, port, password, $"changelevel {map}");
 
-        await rcon.ExecuteAsync(host, port, password, "yb_quota 0");
-        await rcon.ExecuteAsync(host, port, password, $"changelevel {map}");
+            // HLDS is temporarily unavailable for RCON while loading a map.
+            // Wait for it to come back instead of racing the 5-second status timer.
+            await WaitForServerAsync();
 
-        // HLDS can be temporarily unavailable while loading the new map.
-        // Wait until it answers RCON again before sending YaPB commands.
-        await WaitForServerAsync(TimeSpan.FromSeconds(10));
+            await rcon.ExecuteAsync(host, port, password, "yb_quota_mode normal");
+            await rcon.ExecuteAsync(host, port, password, $"yb_difficulty {difficulty}");
+            await rcon.ExecuteAsync(host, port, password, $"yb_quota {bots}");
 
-        await rcon.ExecuteAsync(host, port, password, "yb_quota_mode normal");
-        await rcon.ExecuteAsync(host, port, password, $"yb_difficulty {difficulty}");
-        await rcon.ExecuteAsync(host, port, password, $"yb_quota {bots}");
-
-        MatchActive = true;
+            MatchActive = true;
+        }
+        finally
+        {
+            rconLock.Release();
+        }
     }
 
     public async Task ResetAsync()
     {
-        await rcon.ExecuteAsync(host, port, password, "yb_quota 0");
-        await rcon.ExecuteAsync(host, port, password, "changelevel cs_assault");
-        await WaitForServerAsync(TimeSpan.FromSeconds(10));
-        MatchActive = false;
+        await rconLock.WaitAsync();
+        try
+        {
+            LastError = "";
+            await rcon.ExecuteAsync(host, port, password, "yb_quota 0");
+            await rcon.ExecuteAsync(host, port, password, "changelevel cs_assault");
+            await WaitForServerAsync();
+            MatchActive = false;
+        }
+        finally
+        {
+            rconLock.Release();
+        }
     }
 
-    private async Task WaitForServerAsync(TimeSpan timeout)
+    private async Task WaitForServerAsync()
     {
-        var deadline = DateTime.UtcNow + timeout;
-        Exception? lastError = null;
+        const int attempts = 20;
 
-        while (DateTime.UtcNow < deadline)
+        for (var i = 0; i < attempts; i++)
         {
             try
             {
@@ -92,16 +113,13 @@ public sealed class CsServer
                 LastError = "";
                 return;
             }
-            catch (Exception ex)
+            catch (TimeoutException) when (i < attempts - 1)
             {
-                lastError = ex;
                 await Task.Delay(500);
             }
         }
 
-        throw new TimeoutException(
-            $"Сервер не ответил после смены карты за {timeout.TotalSeconds:0} сек.",
-            lastError);
+        throw new TimeoutException("Сервер не ответил после смены карты.");
     }
 
     private void ParseStatus(string text)
