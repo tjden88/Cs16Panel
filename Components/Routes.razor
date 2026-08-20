@@ -1,0 +1,13 @@
+<Router AppAssembly="@typeof(Program).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData"
+                   DefaultLayout="@typeof(Cs16Panel.Components.Layout.MainLayout)" />
+    </Found>
+
+    <NotFound>
+        <LayoutView Layout="@typeof(Cs16Panel.Components.Layout.MainLayout)">
+            <h1>404</h1>
+            <p>Такой страницы нет.</p>
+        </LayoutView>
+    </NotFound>
+</Router>

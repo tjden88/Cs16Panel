@@ -1,0 +1,165 @@
+@page "/"
+@using Cs16Panel.Services
+@inject CsServer Server
+@implements IDisposable
+
+<PageTitle>Denis CS 1.6</PageTitle>
+
+<div class="page">
+    <header class="header">
+        <div>
+            <div class="eyebrow">Сервер Counter Strike 1.6</div>
+            <h1>Denis CS 1.6</h1>
+            <div class="sub">Создай игру, зайди и играй.</div>
+        </div>
+        <div class="status @(Server.IsOnline ? "online" : "offline")">
+            <span class="dot"></span>
+            @(Server.IsOnline ? "СЕРВЕР ОНЛАЙН" : "СЕРВЕР НЕ ОТВЕЧАЕТ")
+        </div>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(Server.LastError))
+    {
+        <div class="error">@Server.LastError</div>
+    }
+
+    <section class="card status-card">
+        <div class="server-line">
+            <div>
+                <div class="label">Текущая карта</div>
+                <div class="value">@Server.Map</div>
+            </div>
+            <div>
+                <div class="label">Игроки</div>
+                <div class="value">@Server.Players / @Server.MaxPlayers</div>
+            </div>
+            <div>
+                <div class="label">Состояние</div>
+                <div class="value">@(Server.MatchActive ? "ИГРА ИДЁТ" : "СВОБОДЕН")</div>
+            </div>
+        </div>
+    </section>
+
+    <div class="grid">
+        <section class="card">
+            <h2>Создать игру</h2>
+
+            <label>Карта</label>
+            <select @bind="selectedMap">
+                @foreach (var map in Server.Maps)
+                {
+                    <option value="@map">@FriendlyMapName(map)</option>
+                }
+            </select>
+
+            <label>Боты</label>
+            <select @bind="bots">
+                @foreach (var count in new[] { 0, 2, 4, 6, 8, 10 })
+                {
+                    <option value="@count">@(count == 0 ? "Без ботов" : $"{count}")</option>
+                }
+            </select>
+
+            <label>Сложность ботов</label>
+            <select @bind="difficulty">
+                <option value="0">Easy</option>
+                <option value="1">Normal</option>
+                <option value="2">Hard</option>
+                <option value="3">Expert</option>
+            </select>
+
+            <button class="primary" @onclick="StartGame" disabled="@working">
+                @(working ? "ЗАПУСКАЮ..." : "ЗАПУСТИТЬ ИГРУ")
+            </button>
+
+            <button class="secondary" @onclick="ResetServer" disabled="@working">
+                ВЕРНУТЬ В ОЖИДАНИЕ
+            </button>
+        </section>
+
+        <section class="card">
+            <h2>Подключение</h2>
+            <div class="connect">connect @Server.PublicHost:@Server.PublicPort</div>
+            <a class="connect-button" href="steam://connect/@Server.PublicHost:@Server.PublicPort">ПОДКЛЮЧИТЬСЯ ЧЕРЕЗ STEAM</a>
+
+            <h2 class="players-title">Игроки</h2>
+            @if (Server.PlayerNames.Count == 0)
+            {
+                <div class="muted">Пока никого. Даже боты ушли по делам.</div>
+            }
+            else
+            {
+                <div class="players">
+                    @foreach (var player in Server.PlayerNames)
+                    {
+                        <div class="player">@player</div>
+                    }
+                </div>
+            }
+        </section>
+    </div>
+
+    <footer>Автообновление статуса каждые 5 секунд.</footer>
+</div>
+
+@code {
+    private string selectedMap = "de_dust2";
+    private int bots = 0;
+    private int difficulty = 1;
+    private bool working;
+    private System.Threading.Timer? timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Server.RefreshAsync();
+        selectedMap = Server.Map != "unknown" && Server.Maps.Contains(Server.Map)
+            ? Server.Map
+            : Server.Maps.FirstOrDefault() ?? "de_dust2";
+
+        timer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await Server.RefreshAsync();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+    }
+
+    private async Task StartGame()
+    {
+        working = true;
+        try
+        {
+            await Server.StartGameAsync(selectedMap, bots, difficulty);
+        }
+        finally
+        {
+            working = false;
+            await Server.RefreshAsync();
+        }
+    }
+
+    private async Task ResetServer()
+    {
+        working = true;
+        try
+        {
+            await Server.ResetAsync();
+        }
+        finally
+        {
+            working = false;
+            await Server.RefreshAsync();
+        }
+    }
+
+    private static string FriendlyMapName(string map) => map
+        .Replace("de_", "", StringComparison.OrdinalIgnoreCase)
+        .Replace("cs_", "", StringComparison.OrdinalIgnoreCase)
+        .Replace("fy_", "", StringComparison.OrdinalIgnoreCase)
+        .Replace("aim_", "", StringComparison.OrdinalIgnoreCase)
+        .Replace("_", " ");
+
+    public void Dispose() => timer?.Dispose();
+}
