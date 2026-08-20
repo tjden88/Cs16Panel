@@ -1,6 +1,9 @@
 @page "/"
+@page "/denis"
 @using Cs16Panel.Services
+@using Microsoft.AspNetCore.Components
 @inject CsServer Server
+@inject NavigationManager Navigation
 @implements IDisposable
 
 <PageTitle>Denis CS 1.6</PageTitle>
@@ -107,6 +110,25 @@
         </section>
     </div>
 
+    @if (IsAdmin)
+    {
+        <section class="card admin-card">
+            <h2>Управление сервером</h2>
+            <div class="hint">Скрытое меню для владельца. Доступно по <strong>/denis</strong>.</div>
+
+            <div class="admin-grid">
+                <button class="secondary" @onclick="() => SetBots(0)" disabled="@working">Без ботов</button>
+                <button class="secondary" @onclick="() => SetBots(2)" disabled="@working">2 бота</button>
+                <button class="secondary" @onclick="() => SetBots(4)" disabled="@working">4 бота</button>
+                <button class="secondary" @onclick="() => SetBots(6)" disabled="@working">6 ботов</button>
+                <button class="secondary" @onclick="() => SetBots(8)" disabled="@working">8 ботов</button>
+                <button class="secondary" @onclick="() => SetBots(10)" disabled="@working">10 ботов</button>
+                <button class="secondary" @onclick="RestartRound" disabled="@working">Перезапустить раунд</button>
+                <button class="danger" @onclick="ResetServer" disabled="@working">Завершить игру</button>
+            </div>
+        </section>
+    }
+
     <footer>Автообновление статуса каждые 5 секунд.</footer>
 </div>
 
@@ -116,6 +138,11 @@
     private int difficulty = 1;
     private bool working;
     private System.Threading.Timer? timer;
+
+    private bool IsAdmin => Navigation.ToBaseRelativePath(Navigation.Uri)
+        .Split('?', '#')[0]
+        .Trim('/')
+        .Equals("denis", StringComparison.OrdinalIgnoreCase);
 
     protected override async Task OnInitializedAsync()
     {
@@ -152,12 +179,31 @@
         }
     }
 
-    private async Task RemoveBots()
+    private async Task SetBots(int count)
     {
         working = true;
         try
         {
-            await Server.RemoveBotsAsync();
+            await Server.SetBotsAsync(count);
+        }
+        finally
+        {
+            working = false;
+            await Server.RefreshAsync();
+        }
+    }
+
+    private async Task RemoveBots()
+    {
+        await SetBots(0);
+    }
+
+    private async Task RestartRound()
+    {
+        working = true;
+        try
+        {
+            await Server.RestartRoundAsync();
         }
         finally
         {
